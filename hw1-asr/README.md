@@ -157,6 +157,16 @@ streamlit run demo.py
 
 Select from: `CuTile V1 (Baseline)`, `CuTile V10 (Optimized)`, `CuTile Template`, `Scratch (PyTorch)`
 
+### Check the WebUI of your slurm job on your PC
+First, check the port from the output of `streamlit run demo.py`.
+
+Then, you are using slurm, run `show_tunnel.sh` on your **login node/head node**. The script will scan your running jobs to get the node name (the first running job).
+```bash
+bash show_tunnel.sh <port>
+```
+
+In the output of `show_tunnel.sh`, you will get the instruction of running a specific command on your local PC and open a website.
+
 ## Tips
 
 1. **Study the references**:
