@@ -1,6 +1,6 @@
 # Example - Initial CuPy Implementation
 
-## Performance: ~3200ms (baseline)
+## Performance: baseline
 
 ## Key Characteristics:
 1. Pure CuPy tensor operations for compute

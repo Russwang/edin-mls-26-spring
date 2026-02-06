@@ -67,7 +67,7 @@ edin-mls-26-spring/
 ├── hw1-asr/                  # Homework 1: Automatic Speech Recognition
 │   ├── glm_asr_triton_example/   # Triton baseline reference
 │   ├── glm_asr_triton_template/  # YOUR WORK GOES HERE (Triton TODOs)
-│   ├── glm_asr_cutile_example/   # cuTile baseline (~3200ms)
+│   ├── glm_asr_cutile_example/   # cuTile baseline
 │   ├── glm_asr_cutile_template/  # YOUR WORK GOES HERE (cuTile TODOs)
 │   ├── glm_asr_scratch/          # PyTorch CPU reference
 │   ├── benchmark.sh              # Performance benchmarking
@@ -187,7 +187,7 @@ The `hw1-asr/` directory contains a hands-on assignment implementing GPU-acceler
 hw1-asr/
 ├── glm_asr_triton_example/   # Triton baseline reference
 ├── glm_asr_triton_template/  # Start here - fill in the TODOs (Triton)
-├── glm_asr_cutile_example/   # cuTile baseline (~3200ms)
+├── glm_asr_cutile_example/   # cuTile baseline
 ├── glm_asr_cutile_template/  # Start here - fill in the TODOs (cuTile)
 └── glm_asr_scratch/          # PyTorch CPU version for understanding
 ```

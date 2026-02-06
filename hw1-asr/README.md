@@ -17,7 +17,7 @@ GLM-ASR is a speech-to-text model that converts audio into text. This HW1 includ
 student_version/
 ├── glm_asr_triton_example/     # Reference: Triton baseline (Torch + Triton)
 ├── glm_asr_triton_template/    # YOUR WORK: Complete the TODOs here (Triton)
-├── glm_asr_cutile_example/     # Reference: Example baseline (Initial CuPy, ~3200ms)
+├── glm_asr_cutile_example/     # Reference: Example baseline (Initial CuPy)
 ├── glm_asr_cutile_template/    # YOUR WORK: Complete the TODOs here (cuTile)
 ├── glm_asr_scratch/            # Reference: PyTorch baseline
 ├── demo.py                    # Streamlit interactive demo
@@ -31,11 +31,11 @@ student_version/
 
 ### Reference Implementations
 
-| Version | Description | Performance |
-|---------|-------------|-------------|
-| `glm_asr_triton_example` | Baseline: Torch + Triton | - |
-| `glm_asr_cutile_example` | Baseline: Pure CuPy | ~3200ms |
-| `glm_asr_scratch` | PyTorch reference implementation | - |
+| Version | Description |
+|---------|-------------|
+| `glm_asr_triton_example` | Baseline: Torch + Triton |
+| `glm_asr_cutile_example` | Baseline: Pure CuPy |
+| `glm_asr_scratch` | PyTorch reference implementation |
 
 ### Student Templates
 
@@ -127,6 +127,8 @@ Open the template for your track and complete the TODO sections in:
 - `glm_asr_cutile_template/attention.py`
 - `glm_asr_cutile_template/layers.py`
 - `glm_asr_cutile_template/rope.py`
+
+
 
 ### Key Files Explained
 
@@ -227,7 +229,7 @@ In the output of `show_tunnel.sh`, you will get the instruction of running a spe
 
 2. **Test incrementally**: After implementing each layer, run the benchmark to check correctness.
 
-3. **Use CuPy** (CuTile) / **Use Torch + Triton** (Triton): The implementation uses CuPy for CuTile kernels and Torch + Triton for Triton kernels. Key functions:
+3. **Use CuPy + Triton** (CuTile) / **Use Torch + Triton** (Triton): The implementation uses CuPy for CuTile kernels and Torch + Triton for Triton kernels. Key functions:
    - `cp.matmul()` - Matrix multiplication
    - `cp.einsum()` - Einstein summation
    - `cp.exp()`, `cp.sqrt()` - Element-wise operations
@@ -257,6 +259,7 @@ In the output of `show_tunnel.sh`, you will get the instruction of running a spe
 - [CuPy Documentation](https://docs.cupy.dev/)
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
 - [RoPE Paper](https://arxiv.org/abs/2104.09864)
+- [FlashAttention-2 Paper](https://arxiv.org/abs/2307.08691)
 
 ## Questions?
 
