@@ -69,7 +69,7 @@ def rmsnorm_kernel(
     # Step 3: Normalize: x / sqrt(variance + eps)
     # Step 4: Apply weight and store
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -104,7 +104,7 @@ def layernorm_kernel(
     # Step 4: Compute variance = mean((x - mean)^2)
     # Step 5: Normalize and apply affine transform
 
-    # YOUR CODE HERE (approximately 10-12 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -125,7 +125,7 @@ def gelu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     # Step 2: Compute tanh approximation
     # Step 3: Store output
 
-    # YOUR CODE HERE (approximately 6 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -146,7 +146,7 @@ def silu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     # Step 2: Compute sigmoid
     # Step 3: Multiply and store
 
-    # YOUR CODE HERE (approximately 5 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -187,7 +187,7 @@ def linear_kernel_tf32(
     # Step 2: Loop over K tiles and accumulate tl.dot
     # Step 3: Store the result
 
-    # YOUR CODE HERE (approximately 12-15 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -348,7 +348,7 @@ def softmax_kernel(x_ptr, y_ptr, stride_x, stride_y, n_cols, BLOCK_SIZE: tl.cons
     # Step 3: Compute exp and normalize
     # Step 4: Store output
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass
 
 

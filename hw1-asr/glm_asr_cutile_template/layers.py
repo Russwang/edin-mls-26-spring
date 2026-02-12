@@ -70,7 +70,7 @@ def rmsnorm_kernel(
     # result = ct.reshape(result, (1, hidden_size))
     # ct.store(output, index=(pid, 0), tile=result)
 
-    # YOUR CODE HERE (approximately 8 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -111,7 +111,7 @@ def layernorm_kernel(
     # x_norm = x_centered / ct.sqrt(variance + eps)
     # result = x_norm * w_tile + b_tile
 
-    # YOUR CODE HERE (approximately 12 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -140,7 +140,7 @@ def gelu_kernel(x, output, tile_size: ct.Constant[int]):
     #
     # ct.store(output, index=(pid,), tile=result)
 
-    # YOUR CODE HERE (approximately 6 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -166,7 +166,7 @@ def silu_kernel(x, output, tile_size: ct.Constant[int]):
     #
     # ct.store(output, index=(pid,), tile=result)
 
-    # YOUR CODE HERE (approximately 5 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -217,7 +217,7 @@ def linear_kernel_tf32(
     # Step 3: Store result
     # ct.store(output, index=(pid_m, pid_n), tile=acc)
 
-    # YOUR CODE HERE (approximately 12 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -242,7 +242,7 @@ def softmax_kernel(
     #
     # Similar to softmax_inplace_kernel in attention.py
 
-    # YOUR CODE HERE (approximately 10 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 

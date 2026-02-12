@@ -62,7 +62,7 @@ def attention_scores_kernel(
     # Step 3: Compute dot-product scores and scale
     # Step 4: Store scores
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -83,7 +83,7 @@ def softmax_inplace_kernel(scores_ptr, stride_s, seq_k, BLOCK_SIZE: tl.constexpr
     # Step 3: Compute exp and normalize
     # Step 4: Store back
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass
 
 
@@ -122,7 +122,7 @@ def attention_output_kernel(
     # Step 3: Compute weighted sum
     # Step 4: Store output
 
-    # YOUR CODE HERE (approximately 6-8 lines)
+    # YOUR CODE HERE
     pass
 
 

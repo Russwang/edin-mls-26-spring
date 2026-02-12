@@ -67,7 +67,7 @@ def compute_freqs_kernel(
     # ct.store(cos_out, index=(pid, 0), tile=cos_full)
     # ct.store(sin_out, index=(pid, 0), tile=sin_full)
 
-    # YOUR CODE HERE (approximately 10 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 

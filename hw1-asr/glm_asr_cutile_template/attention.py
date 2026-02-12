@@ -69,7 +69,7 @@ def attention_scores_kernel(
     # Hint: scores_tile = ct.reshape(scores_tile, (1, 1, seq_k))
     #       ct.store(scores, index=(pid_bh, pid_q, 0), tile=scores_tile)
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -114,7 +114,7 @@ def softmax_inplace_kernel(
     # softmax_tile = ct.reshape(softmax_tile, (1, 1, seq_k))
     # ct.store(scores, index=(pid_bh, pid_q, 0), tile=softmax_tile)
 
-    # YOUR CODE HERE (approximately 8-10 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 
@@ -160,7 +160,7 @@ def attention_output_kernel(
     # Hint: out_tile = ct.reshape(out_tile, (1, 1, head_dim))
     #       ct.store(output, index=(pid_bh, pid_q, 0), tile=out_tile)
 
-    # YOUR CODE HERE (approximately 6-8 lines)
+    # YOUR CODE HERE
     pass  # Remove this and implement
 
 

@@ -59,7 +59,7 @@ def compute_freqs_kernel(
     # Step 4: Compute cos and sin
     # Step 5: Store concatenated cos/sin
 
-    # YOUR CODE HERE (approximately 10 lines)
+    # YOUR CODE HERE
     pass
 
 

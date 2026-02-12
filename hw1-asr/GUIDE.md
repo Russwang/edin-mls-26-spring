@@ -154,33 +154,33 @@ Recommended reading order:
 
 **Triton track** -- all files in `glm_asr_triton_template/`:
 
-| Kernel | File | Formula | ~Lines |
-|--------|------|---------|--------|
-| `silu_kernel` | `layers.py` | `x * sigmoid(x)` | 5 |
-| `gelu_kernel` | `layers.py` | `0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715*x^3)))` | 6 |
-| `softmax_kernel` | `layers.py` | `exp(x - max) / sum(exp(x - max))` | 8-10 |
-| `rmsnorm_kernel` | `layers.py` | `x / sqrt(mean(x^2) + eps) * weight` | 8-10 |
-| `layernorm_kernel` | `layers.py` | `(x - mean) / sqrt(var + eps) * weight + bias` | 10-12 |
-| `linear_kernel_tf32` | `layers.py` | `A @ B` (tiled matmul) | 12-15 |
-| `attention_scores_kernel` | `attention.py` | `Q @ K^T * scale` | 8-10 |
-| `softmax_inplace_kernel` | `attention.py` | Softmax (in-place) | 8-10 |
-| `attention_output_kernel` | `attention.py` | `attn_weights @ V` | 6-8 |
-| `compute_freqs_kernel` | `rope.py` | `cos/sin(pos * inv_freq)` | 10 |
+| Kernel | File | Formula |
+|--------|------|---------|
+| `silu_kernel` | `layers.py` | `x * sigmoid(x)` |
+| `gelu_kernel` | `layers.py` | `0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715*x^3)))` |
+| `softmax_kernel` | `layers.py` | `exp(x - max) / sum(exp(x - max))` |
+| `rmsnorm_kernel` | `layers.py` | `x / sqrt(mean(x^2) + eps) * weight` |
+| `layernorm_kernel` | `layers.py` | `(x - mean) / sqrt(var + eps) * weight + bias` |
+| `linear_kernel_tf32` | `layers.py` | `A @ B` (tiled matmul) |
+| `attention_scores_kernel` | `attention.py` | `Q @ K^T * scale` |
+| `softmax_inplace_kernel` | `attention.py` | Softmax (in-place) |
+| `attention_output_kernel` | `attention.py` | `attn_weights @ V` |
+| `compute_freqs_kernel` | `rope.py` | `cos/sin(pos * inv_freq)` |
 
 **cuTile track** -- all files in `glm_asr_cutile_template/`:
 
-| Kernel | File | Formula | ~Lines |
-|--------|------|---------|--------|
-| `silu_kernel` | `layers.py` | `x * sigmoid(x)` | 5 |
-| `gelu_kernel` | `layers.py` | `0.5 * x * (1 + tanh(...))` | 6 |
-| `softmax_kernel` | `layers.py` | `exp(x - max) / sum(exp(x - max))` | 10 |
-| `rmsnorm_kernel` | `layers.py` | `x / sqrt(mean(x^2) + eps) * weight` | 8 |
-| `layernorm_kernel` | `layers.py` | `(x - mean) / sqrt(var + eps) * w + b` | 12 |
-| `linear_kernel_tf32` | `layers.py` | `x @ weight_t` (TF32 matmul) | 12 |
-| `attention_scores_kernel` | `attention.py` | `Q @ K^T * scale` | 8-10 |
-| `softmax_inplace_kernel` | `attention.py` | Softmax (in-place) | 8-10 |
-| `attention_output_kernel` | `attention.py` | `attn_weights @ V` | 6-8 |
-| `compute_freqs_kernel` | `rope.py` | `cos/sin(pos * inv_freq)` | 10 |
+| Kernel | File | Formula |
+|--------|------|---------|
+| `silu_kernel` | `layers.py` | `x * sigmoid(x)` |
+| `gelu_kernel` | `layers.py` | `0.5 * x * (1 + tanh(...))` |
+| `softmax_kernel` | `layers.py` | `exp(x - max) / sum(exp(x - max))` |
+| `rmsnorm_kernel` | `layers.py` | `x / sqrt(mean(x^2) + eps) * weight` |
+| `layernorm_kernel` | `layers.py` | `(x - mean) / sqrt(var + eps) * w + b` |
+| `linear_kernel_tf32` | `layers.py` | `x @ weight_t` (TF32 matmul) |
+| `attention_scores_kernel` | `attention.py` | `Q @ K^T * scale` |
+| `softmax_inplace_kernel` | `attention.py` | Softmax (in-place) |
+| `attention_output_kernel` | `attention.py` | `attn_weights @ V` |
+| `compute_freqs_kernel` | `rope.py` | `cos/sin(pos * inv_freq)` |
 
 ### 5.2 Recommended Implementation Order
 
