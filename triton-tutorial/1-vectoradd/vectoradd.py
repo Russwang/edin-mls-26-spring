@@ -10,6 +10,11 @@ def vector_add_kernel(X, Y, Z, N, BLOCK: tl.constexpr):
     mask = offs < N
     x = tl.load(X + offs, mask=mask, other=0.0)
     y = tl.load(Y + offs, mask=mask, other=0.0)
+    # Debug: only the first program prints to avoid excessive output.
+    if pid == 0:
+        tl.device_print("x block: {}", x)
+        tl.device_print("y block: {}", y)
+
     tl.store(Z + offs, x + y, mask=mask)
 
 
