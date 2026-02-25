@@ -60,7 +60,47 @@ def compute_freqs_kernel(
     # Step 5: Store concatenated cos/sin
 
     # YOUR CODE HERE
-    pass
+    offs = tl.arange(0, BLOCK)
+    mask = offs < half_dim
+
+    # 1️⃣ Load position (scalar)
+    pos = tl.load(positions_ptr + pid * stride_pos)
+
+    # 2️⃣ Load inverse frequencies
+    inv = tl.load(inv_freq_ptr + offs * stride_inv, mask=mask, other=0.0)
+
+    # 3️⃣ Compute theta
+    theta = pos * inv
+
+    # 4️⃣ Compute cos and sin
+    cos_half = tl.cos(theta)
+    sin_half = tl.sin(theta)
+
+    # 5️⃣ Store first half
+    tl.store(
+        cos_ptr + pid * stride_cos0 + offs * stride_cos1,
+        cos_half,
+        mask=mask,
+    )
+
+    tl.store(
+        sin_ptr + pid * stride_sin0 + offs * stride_sin1,
+        sin_half,
+        mask=mask,
+    )
+
+    # 6️⃣ Store duplicated second half
+    tl.store(
+        cos_ptr + pid * stride_cos0 + (offs + half_dim) * stride_cos1,
+        cos_half,
+        mask=mask,
+    )
+
+    tl.store(
+        sin_ptr + pid * stride_sin0 + (offs + half_dim) * stride_sin1,
+        sin_half,
+        mask=mask,
+    )
 
 
 # ============================================================================

@@ -70,7 +70,39 @@ def rmsnorm_kernel(
     # Step 4: Apply weight and store
 
     # YOUR CODE HERE
-    pass
+        # Offsets across hidden dimension
+    offsets = tl.arange(0, BLOCK_SIZE)
+    mask = offsets < hidden_size
+
+    # Load row
+    x = tl.load(
+        x_ptr + pid * stride_x + offsets,
+        mask=mask,
+        other=0.0,
+    )
+
+    # 1️⃣ Compute mean of squares
+    x_sq = x * x
+    mean_sq = tl.sum(x_sq, axis=0) / hidden_size
+
+    # 2️⃣ Compute normalization factor
+    inv_rms = 1.0 / tl.sqrt(mean_sq + eps)
+
+    # 3️⃣ Normalize
+    x_norm = x * inv_rms
+
+    # 4️⃣ Load weight
+    w = tl.load(w_ptr + offsets, mask=mask, other=0.0)
+
+    # 5️⃣ Apply weight
+    y = x_norm * w
+
+    # Store
+    tl.store(
+        y_ptr + pid * stride_y + offsets,
+        y,
+        mask=mask,
+    )
 
 
 @triton.jit
@@ -105,7 +137,45 @@ def layernorm_kernel(
     # Step 5: Normalize and apply affine transform
 
     # YOUR CODE HERE
-    pass
+        # Offsets across hidden dimension
+    offsets = tl.arange(0, BLOCK_SIZE)
+    mask = offsets < hidden_size
+
+    # Load input row
+    x = tl.load(
+        x_ptr + pid * stride_x + offsets,
+        mask=mask,
+        other=0.0,
+    )
+
+    # 1️⃣ Compute mean
+    mean = tl.sum(x, axis=0) / hidden_size
+
+    # 2️⃣ Center
+    x_centered = x - mean
+
+    # 3️⃣ Compute variance
+    var = tl.sum(x_centered * x_centered, axis=0) / hidden_size
+
+    # 4️⃣ Compute normalization factor
+    inv_std = 1.0 / tl.sqrt(var + eps)
+
+    # 5️⃣ Normalize
+    x_norm = x_centered * inv_std
+
+    # 6️⃣ Load weight & bias
+    w = tl.load(w_ptr + offsets, mask=mask, other=0.0)
+    b = tl.load(b_ptr + offsets, mask=mask, other=0.0)
+
+    # 7️⃣ Apply affine transform
+    y = x_norm * w + b
+
+    # Store
+    tl.store(
+        y_ptr + pid * stride_y + offsets,
+        y,
+        mask=mask,
+    )
 
 
 @triton.jit
@@ -126,7 +196,23 @@ def gelu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     # Step 3: Store output
 
     # YOUR CODE HERE
-    pass
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+
+    x = tl.load(x_ptr + offsets, mask=mask, other=0.0)
+
+    sqrt_2_over_pi = 0.7978845608028654
+    x3 = x * x * x
+    inner = sqrt_2_over_pi * (x + 0.044715 * x3)
+
+    # tanh approximation via sigmoid
+    sig = 1.0 / (1.0 + tl.exp(-2.0 * inner))
+    tanh_approx = 2.0 * sig - 1.0
+
+    y = 0.5 * x * (1.0 + tanh_approx)
+
+    tl.store(y_ptr + offsets, y, mask=mask)
 
 
 @triton.jit
@@ -147,7 +233,16 @@ def silu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     # Step 3: Multiply and store
 
     # YOUR CODE HERE
-    pass
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+
+    x = tl.load(x_ptr + offsets, mask=mask, other=0.0)
+
+    sigmoid = 1.0 / (1.0 + tl.exp(-x))
+    y = x * sigmoid
+
+    tl.store(y_ptr + offsets, y, mask=mask)
 
 
 @triton.jit
@@ -188,7 +283,43 @@ def linear_kernel_tf32(
     # Step 3: Store the result
 
     # YOUR CODE HERE
-    pass
+        # Offsets for output tile
+    offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
+    offs_k = tl.arange(0, BLOCK_K)
+
+    # Initialize accumulator
+    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
+
+    # Loop over K dimension
+    for k in range(0, K, BLOCK_K):
+
+        # Load A tile
+        a = tl.load(
+            a_ptr + offs_m[:, None] * stride_am
+            + (k + offs_k[None, :]) * stride_ak,
+            mask=(offs_m[:, None] < M) & (k + offs_k[None, :] < K),
+            other=0.0,
+        )
+
+        # Load B tile
+        b = tl.load(
+            b_ptr + (k + offs_k[:, None]) * stride_bk
+            + offs_n[None, :] * stride_bn,
+            mask=(k + offs_k[:, None] < K) & (offs_n[None, :] < N),
+            other=0.0,
+        )
+
+        # Accumulate
+        acc += tl.dot(a, b)
+
+    # Store result
+    tl.store(
+        c_ptr + offs_m[:, None] * stride_cm
+        + offs_n[None, :] * stride_cn,
+        acc,
+        mask=(offs_m[:, None] < M) & (offs_n[None, :] < N),
+    )
 
 
 @triton.jit
@@ -349,7 +480,33 @@ def softmax_kernel(x_ptr, y_ptr, stride_x, stride_y, n_cols, BLOCK_SIZE: tl.cons
     # Step 4: Store output
 
     # YOUR CODE HERE
-    pass
+        # Compute row start
+    row_start = row * stride_x
+
+    # Offsets for this row
+    offsets = tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_cols
+
+    # Load row
+    x = tl.load(x_ptr + row_start + offsets, mask=mask, other=-1e9)
+
+    # 1️⃣ Max reduction (for numerical stability)
+    x_max = tl.max(x, axis=0)
+
+    # Subtract max
+    x = x - x_max
+
+    # 2️⃣ Exponentiate
+    exp_x = tl.exp(x)
+
+    # 3️⃣ Sum reduction
+    denom = tl.sum(exp_x, axis=0)
+
+    # 4️⃣ Normalize
+    y = exp_x / denom
+
+    # Store result
+    tl.store(y_ptr + row * stride_y + offsets, y, mask=mask)
 
 
 @triton.jit

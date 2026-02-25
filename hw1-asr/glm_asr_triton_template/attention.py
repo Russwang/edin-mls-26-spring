@@ -63,7 +63,41 @@ def attention_scores_kernel(
     # Step 4: Store scores
 
     # YOUR CODE HERE
-    pass
+    offs_k = tl.arange(0, BLOCK_K)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    # 1️⃣ Load query vector
+    q = tl.load(
+        q_ptr
+        + pid_bh * stride_q0
+        + pid_q * stride_q1
+        + offs_d * stride_q2,
+        mask=offs_d < head_dim,
+        other=0.0,
+    )
+
+    # 2️⃣ Load all keys
+    k = tl.load(
+        k_ptr
+        + pid_bh * stride_k0
+        + offs_k[:, None] * stride_k1
+        + offs_d[None, :] * stride_k2,
+        mask=(offs_k[:, None] < seq_k) & (offs_d[None, :] < head_dim),
+        other=0.0,
+    )
+
+    # 3️⃣ Dot product
+    scores = tl.sum(k * q[None, :], axis=1) * scale
+
+    # 4️⃣ Store
+    tl.store(
+        scores_ptr
+        + pid_bh * stride_s0
+        + pid_q * stride_s1
+        + offs_k * stride_s2,
+        scores,
+        mask=offs_k < seq_k,
+    )
 
 
 @triton.jit
@@ -84,7 +118,28 @@ def softmax_inplace_kernel(scores_ptr, stride_s, seq_k, BLOCK_SIZE: tl.constexpr
     # Step 4: Store back
 
     # YOUR CODE HERE
-    pass
+    offsets = tl.arange(0, BLOCK_SIZE)
+    mask = offsets < seq_k
+
+    x = tl.load(
+        scores_ptr + row * stride_s + offsets,
+        mask=mask,
+        other=-1e9,
+    )
+
+    x_max = tl.max(x, axis=0)
+    x = x - x_max
+
+    exp_x = tl.exp(x)
+    denom = tl.sum(exp_x, axis=0)
+
+    y = exp_x / denom
+
+    tl.store(
+        scores_ptr + row * stride_s + offsets,
+        y,
+        mask=mask,
+    )
 
 
 @triton.jit
@@ -123,7 +178,41 @@ def attention_output_kernel(
     # Step 4: Store output
 
     # YOUR CODE HERE
-    pass
+    offs_k = tl.arange(0, BLOCK_K)
+    offs_d = tl.arange(0, BLOCK_D)
+
+    # 1️⃣ Load attention weights
+    w = tl.load(
+        attn_ptr
+        + pid_bh * stride_w0
+        + pid_q * stride_w1
+        + offs_k * stride_w2,
+        mask=offs_k < seq_k,
+        other=0.0,
+    )
+
+    # 2️⃣ Load values
+    v = tl.load(
+        v_ptr
+        + pid_bh * stride_v0
+        + offs_k[:, None] * stride_v1
+        + offs_d[None, :] * stride_v2,
+        mask=(offs_k[:, None] < seq_k) & (offs_d[None, :] < head_dim),
+        other=0.0,
+    )
+
+    # 3️⃣ Weighted sum
+    out = tl.sum(v * w[:, None], axis=0)
+
+    # 4️⃣ Store
+    tl.store(
+        output_ptr
+        + pid_bh * stride_o0
+        + pid_q * stride_o1
+        + offs_d * stride_o2,
+        out,
+        mask=offs_d < head_dim,
+    )
 
 
 @triton.jit
