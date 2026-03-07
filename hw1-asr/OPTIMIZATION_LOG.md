@@ -67,6 +67,20 @@ Improvement summary:
 - `MLP.FUSED = True/False`
 - `EncoderMLP.FUSED = True/False`
 
+Run commands (use best tile config from Experiment A):
+
+```bash
+# B1: Fused ON (default)
+TRITON_TILE_M=64 TRITON_TILE_N=64 TRITON_TILE_K=32 \
+TRITON_MLP_FUSED=1 TRITON_ENCODER_MLP_FUSED=1 \
+./benchmark.sh glm_asr_triton_template
+
+# B2: Fused OFF
+TRITON_TILE_M=64 TRITON_TILE_N=64 TRITON_TILE_K=32 \
+TRITON_MLP_FUSED=0 TRITON_ENCODER_MLP_FUSED=0 \
+./benchmark.sh glm_asr_triton_template
+```
+
 ### Results
 | MLP.FUSED | EncoderMLP.FUSED | Time (ms) | Accuracy | Notes |
 |---|---|---:|---:|---|

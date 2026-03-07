@@ -48,6 +48,19 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_bool(name: str, default: bool) -> bool:
+    """Read boolean env var with fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 # ============================================================================
 # Triton Kernels
 # ============================================================================
@@ -1011,7 +1024,7 @@ def softmax(x: torch.Tensor, axis: int = -1) -> torch.Tensor:
 class MLP:
     """MLP with SwiGLU gating using Triton."""
 
-    FUSED = True
+    FUSED = env_bool("TRITON_MLP_FUSED", True)
     TILE_M = env_int("TRITON_TILE_M", 64)
     TILE_N = env_int("TRITON_TILE_N", 64)
     TILE_K = env_int("TRITON_TILE_K", 32)
@@ -1140,7 +1153,7 @@ class MLP:
 class EncoderMLP:
     """Encoder MLP (no gating) using Triton."""
 
-    FUSED = True
+    FUSED = env_bool("TRITON_ENCODER_MLP_FUSED", True)
     TILE_M = env_int("TRITON_TILE_M", 64)
     TILE_N = env_int("TRITON_TILE_N", 64)
     TILE_K = env_int("TRITON_TILE_K", 32)
