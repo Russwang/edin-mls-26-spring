@@ -200,17 +200,13 @@ def gelu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     offsets = block_start + tl.arange(0, BLOCK_SIZE)
     mask = offsets < n_elements
 
-    x = tl.load(x_ptr + offsets, mask=mask, other=0.0)
+    x = tl.load(x_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
 
     sqrt_2_over_pi = 0.7978845608028654
     x3 = x * x * x
     inner = sqrt_2_over_pi * (x + 0.044715 * x3)
 
-    # tanh approximation via sigmoid
-    sig = 1.0 / (1.0 + tl.exp(-2.0 * inner))
-    tanh_approx = 2.0 * sig - 1.0
-
-    y = 0.5 * x * (1.0 + tanh_approx)
+    y = 0.5 * x * (1.0 + tl.extra.cuda.libdevice.tanh(inner))
 
     tl.store(y_ptr + offsets, y, mask=mask)
 
@@ -237,7 +233,7 @@ def silu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     offsets = block_start + tl.arange(0, BLOCK_SIZE)
     mask = offsets < n_elements
 
-    x = tl.load(x_ptr + offsets, mask=mask, other=0.0)
+    x = tl.load(x_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
 
     sigmoid = 1.0 / (1.0 + tl.exp(-x))
     y = x * sigmoid
