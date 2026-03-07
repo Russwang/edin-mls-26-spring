@@ -7,6 +7,7 @@ Fill in the TODO sections to implement core layers using Triton kernels
 """
 
 import math
+import os
 from typing import Optional, Tuple
 
 import numpy as np
@@ -34,6 +35,17 @@ def pad_to_multiple(size: int, multiple: int) -> int:
 def next_power_of_two(x: int) -> int:
     """Return the smallest power of two >= x."""
     return 1 << (x - 1).bit_length() if x > 0 else 1
+
+
+def env_int(name: str, default: int) -> int:
+    """Read integer env var with fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
 
 
 # ============================================================================
@@ -790,9 +802,9 @@ def get_activation(name: str):
 class Linear:
     """Linear layer with switchable backend (torch or Triton)."""
 
-    TILE_M = 64
-    TILE_N = 64
-    TILE_K = 32
+    TILE_M = env_int("TRITON_TILE_M", 64)
+    TILE_N = env_int("TRITON_TILE_N", 64)
+    TILE_K = env_int("TRITON_TILE_K", 32)
 
     BACKEND = "torch"
 
@@ -1000,7 +1012,9 @@ class MLP:
     """MLP with SwiGLU gating using Triton."""
 
     FUSED = True
-    TILE_M, TILE_N, TILE_K = 64, 64, 32
+    TILE_M = env_int("TRITON_TILE_M", 64)
+    TILE_N = env_int("TRITON_TILE_N", 64)
+    TILE_K = env_int("TRITON_TILE_K", 32)
 
     def __init__(
         self,
@@ -1127,7 +1141,9 @@ class EncoderMLP:
     """Encoder MLP (no gating) using Triton."""
 
     FUSED = True
-    TILE_M, TILE_N, TILE_K = 64, 64, 32
+    TILE_M = env_int("TRITON_TILE_M", 64)
+    TILE_N = env_int("TRITON_TILE_N", 64)
+    TILE_K = env_int("TRITON_TILE_K", 32)
 
     def __init__(
         self,
