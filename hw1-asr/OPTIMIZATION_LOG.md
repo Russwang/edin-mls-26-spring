@@ -38,24 +38,28 @@ TRITON_TILE_M=64 TRITON_TILE_N=128 TRITON_TILE_K=32 ./benchmark.sh glm_asr_trito
 
 ### A1
 - `Linear.TILE_M/TILE_N/TILE_K` = `64/64/32` (current)
-- Result: (fill)
+- Result: `1376.7 ms`, `Accuracy 100%`, `PASS`
 
 ### A2
 - `Linear.TILE_M/TILE_N/TILE_K` = `128/64/32`
-- Result: (fill)
+- Result: `1509.6 ms`, `Accuracy 100%`, `PASS` (std high: `+/- 90.2 ms`)
 
 ### A3
 - `Linear.TILE_M/TILE_N/TILE_K` = `64/128/32`
-- Result: (fill)
+- Result: `1439.2 ms`, `Accuracy 100%`, `PASS`
 
 ### A Summary
 | Config | Time (ms) | Accuracy | Notes |
 |---|---:|---:|---|
-| 64/64/32 |  |  |  |
-| 128/64/32 |  |  |  |
-| 64/128/32 |  |  |  |
+| 64/64/32 | 1376.7 | 100.0% | Best; stable (`+/- 9.1 ms`) |
+| 128/64/32 | 1509.6 | 100.0% | Slower; unstable variance |
+| 64/128/32 | 1439.2 | 100.0% | Faster than default, slower than best |
 
-Best config: (fill)
+Best config: `64/64/32`
+
+Improvement summary:
+- vs previous template run (`1533.5 ms`): `-156.8 ms` (~`10.2%` faster)
+- vs example baseline (`1620.4 ms`): `-243.7 ms` (~`15.0%` faster)
 
 ## Experiment B: Fusion On/Off (Requirement 2)
 
