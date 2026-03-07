@@ -84,10 +84,12 @@ TRITON_MLP_FUSED=0 TRITON_ENCODER_MLP_FUSED=0 \
 ### Results
 | MLP.FUSED | EncoderMLP.FUSED | Time (ms) | Accuracy | Notes |
 |---|---|---:|---:|---|
-| True | True |  |  | current default |
-| False | False |  |  |  |
+| True | True | 1381.5 | 100.0% | Best and stable (`+/- 9.0 ms`) |
+| False | False | 1684.7 | 100.0% | Much slower and unstable (`+/- 240.4 ms`) |
 
-Conclusion: (fill)
+Conclusion:
+- Keeping fusion ON improves latency by `303.2 ms` (~`18.0%`) vs fusion OFF.
+- Fusion requirement is satisfied with clear benchmark evidence.
 
 ## Requirement 3: FlashAttention-style Attention
 Current status: not implemented yet (current attention is score + softmax + output kernels).
