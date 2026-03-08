@@ -488,7 +488,7 @@ def scaled_dot_product_attention(
 
         grid = (batch * num_heads, seq_q)
         use_flash = (
-            env_bool("TRITON_USE_FLASH_ATTN", True)
+            env_bool("TRITON_USE_FLASH_ATTN", False)
             and attention_mask is None
             and (not is_causal or seq_q == seq_k)
         )

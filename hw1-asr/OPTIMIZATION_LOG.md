@@ -92,12 +92,15 @@ Conclusion:
 - Fusion requirement is satisfied with clear benchmark evidence.
 
 ## Requirement 3: FlashAttention-style Attention
-Current status: not implemented yet (current attention is score + softmax + output kernels).
+Current status:
+- Implemented a minimal FlashAttention-style streaming kernel in `attention.py`
+  (`flash_attention_streaming_kernel`).
+- Exposed control flag: `TRITON_USE_FLASH_ATTN=1` to enable.
+- Default is `TRITON_USE_FLASH_ATTN=0` to keep end-to-end correctness stable.
 
-Plan:
-1. Implement blockwise QK^T + streaming softmax + V accumulation in `attention.py`.
-2. Re-run benchmark and compare with current implementation.
-3. Record accuracy and timing.
+Validation note:
+- Flash path currently requires more numerical/masking refinement before production use.
+- Default benchmark path remains the validated score+softmax+output implementation.
 
 ## Final Submission Notes
 - Correctness target: `Accuracy > 80%` (current: 100%).
