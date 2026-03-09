@@ -17,10 +17,77 @@ import os
 import numpy as np
 from collections import defaultdict
 from contextlib import contextmanager
+import importlib
 
 # Profiling data storage
 PROFILE_DATA = defaultdict(list)
 PROFILE_ENABLED = False
+
+
+def env_bool(name, default):
+    """Read a boolean environment variable with a sensible fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def env_int(name, default):
+    """Read an integer environment variable with a sensible fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def iter_measurements(num_runs):
+    """
+    Yield whether the current iteration should be recorded.
+
+    The first CUDA/Triton/cuBLAS call often pays one-time setup cost, so we run
+    a small warmup by default and only record steady-state iterations.
+    """
+    warmup_runs = max(0, env_int("BENCHMARK_WARMUP_RUNS", 1))
+    for idx in range(num_runs + warmup_runs):
+        yield idx >= warmup_runs
+
+
+def summarize_times(times):
+    """Return mean/std/min/max summary for a list of timings."""
+    return {
+        'mean': np.mean(times),
+        'std': np.std(times),
+        'min': np.min(times),
+        'max': np.max(times),
+    }
+
+
+def apply_triton_runtime_config(folder_name):
+    """Mirror benchmark_student.py so profiling uses the same Triton knobs."""
+    layers = importlib.import_module("layers")
+    backend = os.getenv("TRITON_LINEAR_BACKEND", "cublas")
+    mlp_fused = env_bool("TRITON_MLP_FUSED", False)
+    encoder_mlp_fused = env_bool("TRITON_ENCODER_MLP_FUSED", False)
+
+    layers.Linear.BACKEND = backend
+    layers.MLP.FUSED = mlp_fused
+    if hasattr(layers, "EncoderMLP"):
+        layers.EncoderMLP.FUSED = encoder_mlp_fused
+
+    print(
+        f"Applied Triton runtime config for {folder_name}: "
+        f"Linear.BACKEND={layers.Linear.BACKEND}, "
+        f"MLP.FUSED={layers.MLP.FUSED}, "
+        f"EncoderMLP.FUSED={getattr(layers, 'EncoderMLP').FUSED if hasattr(layers, 'EncoderMLP') else 'n/a'}"
+    )
 
 
 class CUDATimer:
@@ -181,36 +248,28 @@ def detailed_profile(model, input_features, input_ids, input_features_mask, num_
     # 1. Profile Audio Encoder
     print("\n[1/4] Profiling Audio Encoder...")
     encoder_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         with cp.cuda.Device():
             audio_features = model.audio_encoder(input_features)
         elapsed = timer.stop()
-        encoder_times.append(elapsed)
-    results['audio_encoder'] = {
-        'mean': np.mean(encoder_times),
-        'std': np.std(encoder_times),
-        'min': np.min(encoder_times),
-        'max': np.max(encoder_times)
-    }
+        if record:
+            encoder_times.append(elapsed)
+    results['audio_encoder'] = summarize_times(encoder_times)
     print(f"  Audio Encoder: {results['audio_encoder']['mean']:.2f}ms (+/- {results['audio_encoder']['std']:.2f}ms)")
 
     # 2. Profile Multi-modal Projector
     print("\n[2/4] Profiling Multi-modal Projector...")
     projector_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         projected = model.multi_modal_projector(audio_features)
         elapsed = timer.stop()
-        projector_times.append(elapsed)
-    results['projector'] = {
-        'mean': np.mean(projector_times),
-        'std': np.std(projector_times),
-        'min': np.min(projector_times),
-        'max': np.max(projector_times)
-    }
+        if record:
+            projector_times.append(elapsed)
+    results['projector'] = summarize_times(projector_times)
     print(f"  Projector: {results['projector']['mean']:.2f}ms (+/- {results['projector']['std']:.2f}ms)")
 
     # 3. Profile Text Decoder (prefill phase)
@@ -233,19 +292,15 @@ def detailed_profile(model, input_features, input_ids, input_features_mask, num_
             combined_embeds[0, audio_positions[:projected.shape[1]]] = projected[0, :num_audio_tokens]
 
     prefill_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         # Call with inputs_embeds argument
         hidden_states = model.text_decoder(inputs_embeds=combined_embeds)
         elapsed = timer.stop()
-        prefill_times.append(elapsed)
-    results['decoder_prefill'] = {
-        'mean': np.mean(prefill_times),
-        'std': np.std(prefill_times),
-        'min': np.min(prefill_times),
-        'max': np.max(prefill_times)
-    }
+        if record:
+            prefill_times.append(elapsed)
+    results['decoder_prefill'] = summarize_times(prefill_times)
     print(f"  Decoder Prefill: {results['decoder_prefill']['mean']:.2f}ms (+/- {results['decoder_prefill']['std']:.2f}ms)")
 
     # 4. Profile Decode Steps (autoregressive)
@@ -270,13 +325,20 @@ def detailed_profile(model, input_features, input_ids, input_features_mask, num_
         elapsed = timer.stop()
         decode_times.append(elapsed)
 
-    results['decode_step'] = {
-        'mean': np.mean(decode_times),
-        'std': np.std(decode_times),
-        'min': np.min(decode_times),
-        'max': np.max(decode_times)
-    }
+    results['decode_step'] = summarize_times(decode_times)
+    if decode_times:
+        results['decode_step_first'] = summarize_times([decode_times[0]])
+        if len(decode_times) > 1:
+            results['decode_step_steady'] = summarize_times(decode_times[1:])
+        else:
+            results['decode_step_steady'] = summarize_times(decode_times)
     print(f"  Decode Step (avg): {results['decode_step']['mean']:.2f}ms (+/- {results['decode_step']['std']:.2f}ms)")
+    if 'decode_step_steady' in results:
+        print(
+            f"  Decode Step (steady-state): "
+            f"{results['decode_step_steady']['mean']:.2f}ms "
+            f"(first step {results['decode_step_first']['mean']:.2f}ms)"
+        )
 
     # 5. Profile individual layers in decoder
     print("\n[5] Profiling Individual Decoder Layers...")
@@ -294,7 +356,7 @@ def detailed_profile(model, input_features, input_ids, input_features_mask, num_
 
         for i, layer in enumerate(layers):
             times = []
-            for _ in range(num_runs):
+            for record in iter_measurements(num_runs):
                 cp.cuda.Device().synchronize()
                 timer.start()
                 # Try calling with position_ids if needed
@@ -304,7 +366,8 @@ def detailed_profile(model, input_features, input_ids, input_features_mask, num_
                     position_ids = cp.arange(seq_len, dtype=cp.int64).reshape(1, -1)
                     test_output = layer(test_input, position_ids=position_ids)
                 elapsed = timer.stop()
-                times.append(elapsed)
+                if record:
+                    times.append(elapsed)
 
             layer_times.append({
                 'name': f'layer_{i}',
@@ -334,36 +397,28 @@ def detailed_profile_torch(model, input_features, input_ids, input_features_mask
 
     print("\n[1/4] Profiling Audio Encoder...")
     encoder_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         audio_features = model.audio_encoder(input_features)
         elapsed = timer.stop()
-        encoder_times.append(elapsed)
-    results['audio_encoder'] = {
-        'mean': np.mean(encoder_times),
-        'std': np.std(encoder_times),
-        'min': np.min(encoder_times),
-        'max': np.max(encoder_times)
-    }
+        if record:
+            encoder_times.append(elapsed)
+    results['audio_encoder'] = summarize_times(encoder_times)
     print(f"  Audio Encoder: {results['audio_encoder']['mean']:.2f}ms (+/- {results['audio_encoder']['std']:.2f}ms)")
 
     print("\n[2/4] Profiling Multi-modal Projector...")
     projector_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         projected = model.multi_modal_projector(audio_features)
         elapsed = timer.stop()
-        projector_times.append(elapsed)
-    results['projector'] = {
-        'mean': np.mean(projector_times),
-        'std': np.std(projector_times),
-        'min': np.min(projector_times),
-        'max': np.max(projector_times)
-    }
+        if record:
+            projector_times.append(elapsed)
+    results['projector'] = summarize_times(projector_times)
     print(f"  Projector: {results['projector']['mean']:.2f}ms (+/- {results['projector']['std']:.2f}ms)")
 
     print("\n[3/4] Profiling Text Decoder (Prefill)...")
@@ -381,19 +436,15 @@ def detailed_profile_torch(model, input_features, input_ids, input_features_mask
             combined_embeds[0, audio_positions[:projected.shape[1]]] = projected[0, :num_audio_tokens]
 
     prefill_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         hidden_states = model.text_decoder(inputs_embeds=combined_embeds)
         elapsed = timer.stop()
-        prefill_times.append(elapsed)
-    results['decoder_prefill'] = {
-        'mean': np.mean(prefill_times),
-        'std': np.std(prefill_times),
-        'min': np.min(prefill_times),
-        'max': np.max(prefill_times)
-    }
+        if record:
+            prefill_times.append(elapsed)
+    results['decoder_prefill'] = summarize_times(prefill_times)
     print(f"  Decoder Prefill: {results['decoder_prefill']['mean']:.2f}ms (+/- {results['decoder_prefill']['std']:.2f}ms)")
 
     print("\n[4/4] Profiling Decode Steps...")
@@ -414,13 +465,20 @@ def detailed_profile_torch(model, input_features, input_ids, input_features_mask
         elapsed = timer.stop()
         decode_times.append(elapsed)
 
-    results['decode_step'] = {
-        'mean': np.mean(decode_times),
-        'std': np.std(decode_times),
-        'min': np.min(decode_times),
-        'max': np.max(decode_times)
-    }
+    results['decode_step'] = summarize_times(decode_times)
+    if decode_times:
+        results['decode_step_first'] = summarize_times([decode_times[0]])
+        if len(decode_times) > 1:
+            results['decode_step_steady'] = summarize_times(decode_times[1:])
+        else:
+            results['decode_step_steady'] = summarize_times(decode_times)
     print(f"  Decode Step (avg): {results['decode_step']['mean']:.2f}ms (+/- {results['decode_step']['std']:.2f}ms)")
+    if 'decode_step_steady' in results:
+        print(
+            f"  Decode Step (steady-state): "
+            f"{results['decode_step_steady']['mean']:.2f}ms "
+            f"(first step {results['decode_step_first']['mean']:.2f}ms)"
+        )
 
     print("\n[5] Profiling Individual Decoder Layers...")
     layer_times = []
@@ -436,7 +494,7 @@ def detailed_profile_torch(model, input_features, input_ids, input_features_mask
 
         for i, layer in enumerate(layers):
             times = []
-            for _ in range(num_runs):
+            for record in iter_measurements(num_runs):
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 timer.start()
@@ -446,7 +504,8 @@ def detailed_profile_torch(model, input_features, input_ids, input_features_mask
                     position_ids = torch.arange(seq_len, dtype=torch.int64, device=test_input.device).reshape(1, -1)
                     test_output = layer(test_input, position_ids=position_ids)
                 elapsed = timer.stop()
-                times.append(elapsed)
+                if record:
+                    times.append(elapsed)
 
             layer_times.append({
                 'name': f'layer_{i}',
@@ -490,7 +549,7 @@ def profile_attention_ops(model, seq_len=256, num_runs=5):
 
     print("\n[1] Standard Attention (einsum)...")
     standard_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
 
@@ -500,7 +559,8 @@ def profile_attention_ops(model, seq_len=256, num_runs=5):
         output = cp.einsum('bhqk,bhkd->bhqd', attn_weights, v)
 
         elapsed = timer.stop()
-        standard_times.append(elapsed)
+        if record:
+            standard_times.append(elapsed)
 
     results['standard_attention'] = np.mean(standard_times)
     print(f"  Standard: {np.mean(standard_times):.2f}ms (+/- {np.std(standard_times):.2f}ms)")
@@ -514,7 +574,7 @@ def profile_attention_ops(model, seq_len=256, num_runs=5):
     k_2d = k.reshape(batch_size * num_heads, seq_len, head_dim)
     v_2d = v.reshape(batch_size * num_heads, seq_len, head_dim)
 
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
 
@@ -524,7 +584,8 @@ def profile_attention_ops(model, seq_len=256, num_runs=5):
         output = cp.matmul(attn_weights, v_2d)
 
         elapsed = timer.stop()
-        cublas_times.append(elapsed)
+        if record:
+            cublas_times.append(elapsed)
 
     results['cublas_attention'] = np.mean(cublas_times)
     print(f"  cuBLAS: {np.mean(cublas_times):.2f}ms (+/- {np.std(cublas_times):.2f}ms)")
@@ -557,7 +618,7 @@ def profile_attention_ops_torch(seq_len=256, num_runs=5):
 
     print("\n[1] Standard Attention (einsum)...")
     standard_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
@@ -568,7 +629,8 @@ def profile_attention_ops_torch(seq_len=256, num_runs=5):
         output = torch.einsum('bhqk,bhkd->bhqd', attn_weights, v)
 
         elapsed = timer.stop()
-        standard_times.append(elapsed)
+        if record:
+            standard_times.append(elapsed)
 
     results['standard_attention'] = np.mean(standard_times)
     print(f"  Standard: {np.mean(standard_times):.2f}ms (+/- {np.std(standard_times):.2f}ms)")
@@ -580,7 +642,7 @@ def profile_attention_ops_torch(seq_len=256, num_runs=5):
     k_2d = k.reshape(batch_size * num_heads, seq_len, head_dim)
     v_2d = v.reshape(batch_size * num_heads, seq_len, head_dim)
 
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
@@ -591,7 +653,8 @@ def profile_attention_ops_torch(seq_len=256, num_runs=5):
         output = torch.matmul(attn_weights, v_2d)
 
         elapsed = timer.stop()
-        matmul_times.append(elapsed)
+        if record:
+            matmul_times.append(elapsed)
 
     results['matmul_attention'] = np.mean(matmul_times)
     print(f"  Torch matmul: {np.mean(matmul_times):.2f}ms (+/- {np.std(matmul_times):.2f}ms)")
@@ -621,12 +684,13 @@ def profile_linear_ops(hidden_size=2048, intermediate_size=5632, batch_size=1, s
     # 1. CuPy matmul
     print("\n[1] CuPy matmul...")
     matmul_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         y = cp.matmul(x, w_proj)
         elapsed = timer.stop()
-        matmul_times.append(elapsed)
+        if record:
+            matmul_times.append(elapsed)
 
     results['cupy_matmul'] = np.mean(matmul_times)
     print(f"  CuPy matmul: {np.mean(matmul_times):.2f}ms (+/- {np.std(matmul_times):.2f}ms)")
@@ -634,12 +698,13 @@ def profile_linear_ops(hidden_size=2048, intermediate_size=5632, batch_size=1, s
     # 2. CuPy einsum
     print("\n[2] CuPy einsum...")
     einsum_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         y = cp.einsum('bsh,ho->bso', x, w_proj)
         elapsed = timer.stop()
-        einsum_times.append(elapsed)
+        if record:
+            einsum_times.append(elapsed)
 
     results['cupy_einsum'] = np.mean(einsum_times)
     print(f"  CuPy einsum: {np.mean(einsum_times):.2f}ms (+/- {np.std(einsum_times):.2f}ms)")
@@ -648,12 +713,13 @@ def profile_linear_ops(hidden_size=2048, intermediate_size=5632, batch_size=1, s
     print("\n[3] cuBLAS GEMM (batched)...")
     x_2d = x.reshape(-1, hidden_size)
     gemm_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
         y = cp.matmul(x_2d, w_proj)
         elapsed = timer.stop()
-        gemm_times.append(elapsed)
+        if record:
+            gemm_times.append(elapsed)
 
     results['cublas_gemm'] = np.mean(gemm_times)
     print(f"  cuBLAS GEMM: {np.mean(gemm_times):.2f}ms (+/- {np.std(gemm_times):.2f}ms)")
@@ -664,7 +730,7 @@ def profile_linear_ops(hidden_size=2048, intermediate_size=5632, batch_size=1, s
     w_up = cp.random.randn(hidden_size, intermediate_size, dtype=cp.float32)
 
     mlp_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         cp.cuda.Device().synchronize()
         timer.start()
 
@@ -676,7 +742,8 @@ def profile_linear_ops(hidden_size=2048, intermediate_size=5632, batch_size=1, s
         output = cp.matmul(hidden, w_down)
 
         elapsed = timer.stop()
-        mlp_times.append(elapsed)
+        if record:
+            mlp_times.append(elapsed)
 
     results['full_mlp'] = np.mean(mlp_times)
     print(f"  Full MLP: {np.mean(mlp_times):.2f}ms (+/- {np.std(mlp_times):.2f}ms)")
@@ -711,26 +778,28 @@ def profile_linear_ops_torch(hidden_size=2048, intermediate_size=5632, batch_siz
 
     print("\n[1] Torch matmul...")
     matmul_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         y = torch.matmul(x, w_proj)
         elapsed = timer.stop()
-        matmul_times.append(elapsed)
+        if record:
+            matmul_times.append(elapsed)
 
     results['torch_matmul'] = np.mean(matmul_times)
     print(f"  Torch matmul: {np.mean(matmul_times):.2f}ms (+/- {np.std(matmul_times):.2f}ms)")
 
     print("\n[2] Torch einsum...")
     einsum_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         y = torch.einsum('bsh,ho->bso', x, w_proj)
         elapsed = timer.stop()
-        einsum_times.append(elapsed)
+        if record:
+            einsum_times.append(elapsed)
 
     results['torch_einsum'] = np.mean(einsum_times)
     print(f"  Torch einsum: {np.mean(einsum_times):.2f}ms (+/- {np.std(einsum_times):.2f}ms)")
@@ -738,13 +807,14 @@ def profile_linear_ops_torch(hidden_size=2048, intermediate_size=5632, batch_siz
     print("\n[3] Torch GEMM (batched)...")
     x_2d = x.reshape(-1, hidden_size)
     gemm_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
         y = torch.matmul(x_2d, w_proj)
         elapsed = timer.stop()
-        gemm_times.append(elapsed)
+        if record:
+            gemm_times.append(elapsed)
 
     results['torch_gemm'] = np.mean(gemm_times)
     print(f"  Torch GEMM: {np.mean(gemm_times):.2f}ms (+/- {np.std(gemm_times):.2f}ms)")
@@ -754,7 +824,7 @@ def profile_linear_ops_torch(hidden_size=2048, intermediate_size=5632, batch_siz
     w_up = torch.randn(hidden_size, intermediate_size, device=device)
 
     mlp_times = []
-    for _ in range(num_runs):
+    for record in iter_measurements(num_runs):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
         timer.start()
@@ -766,7 +836,8 @@ def profile_linear_ops_torch(hidden_size=2048, intermediate_size=5632, batch_siz
         output = torch.matmul(hidden, w_down)
 
         elapsed = timer.stop()
-        mlp_times.append(elapsed)
+        if record:
+            mlp_times.append(elapsed)
 
     results['full_mlp'] = np.mean(mlp_times)
     print(f"  Full MLP: {np.mean(mlp_times):.2f}ms (+/- {np.std(mlp_times):.2f}ms)")
@@ -949,6 +1020,9 @@ def main():
     for mod_name in list(sys.modules.keys()):
         if mod_name in ['weight_loader', 'model', 'layers', 'attention', 'rope', 'conv']:
             del sys.modules[mod_name]
+
+    if "triton" in args.folder.lower():
+        apply_triton_runtime_config(args.folder)
 
     print(f"\nLoading model from {args.folder}...")
     from weight_loader import load_model_from_hf

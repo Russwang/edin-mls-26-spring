@@ -20,6 +20,45 @@ import importlib
 # Expected transcription for the test audio
 EXPECTED_TEXT = "CONCORD RETURNED TO ITS PLACE AMIDST THE TENTS"
 
+
+def env_bool(name, default):
+    """Read a boolean environment variable with a sensible fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def apply_triton_runtime_config(folder_name):
+    """
+    Apply a consistent Triton runtime configuration.
+
+    The benchmark imports modules directly from the folder, so package-level
+    defaults in ``__init__.py`` are not executed. Set the runtime knobs here
+    explicitly so template/example comparisons are fair and reproducible.
+    """
+    layers = importlib.import_module("layers")
+    backend = os.getenv("TRITON_LINEAR_BACKEND", "cublas")
+    mlp_fused = env_bool("TRITON_MLP_FUSED", False)
+    encoder_mlp_fused = env_bool("TRITON_ENCODER_MLP_FUSED", False)
+
+    layers.Linear.BACKEND = backend
+    layers.MLP.FUSED = mlp_fused
+    if hasattr(layers, "EncoderMLP"):
+        layers.EncoderMLP.FUSED = encoder_mlp_fused
+
+    print(
+        f"Applied Triton runtime config for {folder_name}: "
+        f"Linear.BACKEND={layers.Linear.BACKEND}, "
+        f"MLP.FUSED={layers.MLP.FUSED}, "
+        f"EncoderMLP.FUSED={getattr(layers, 'EncoderMLP').FUSED if hasattr(layers, 'EncoderMLP') else 'n/a'}"
+    )
+
 def download_librispeech_sample():
     """Download a LibriSpeech sample audio file."""
     import urllib.request
@@ -253,13 +292,7 @@ def benchmark_triton_folder(folder_name, audio_array, num_warmup=1, num_runs=3):
         if mod_name in ['weight_loader', 'model', 'layers', 'attention', 'rope', 'conv', 'decode_attention']:
             del sys.modules[mod_name]
 
-    if 'example' in folder_name.lower():
-        print("Applying baseline configuration (example)...")
-        layers = importlib.import_module("layers")
-        layers.Linear.BACKEND = 'cublas'
-        layers.MLP.FUSED = False
-        if hasattr(layers, 'EncoderMLP'):
-            layers.EncoderMLP.FUSED = False
+    apply_triton_runtime_config(folder_name)
 
     print(f"Loading model from {folder_name}...")
     from weight_loader import load_model_from_hf

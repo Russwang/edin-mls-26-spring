@@ -815,14 +815,20 @@ class GlmAsrModel:
             eos_token_ids, dtype=torch.int64, device=generated.device
         )
 
+        # Prefill once and initialize KV cache for the prompt/audio context.
+        logits, past_key_values = self.decode(
+            inputs_embeds=inputs_embeds,
+            use_cache=True,
+        )
+
         # Autoregressive generation
         for _ in range(max_new_tokens):
-            # Get logits for next token
-            logits = self.decode(inputs_embeds=inputs_embeds)
             next_token_logits = logits[:, -1, :] / temperature
 
             # Top-k sampling
-            if top_k > 0 and top_k < next_token_logits.shape[-1]:
+            if top_k == 1:
+                next_token = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+            elif top_k > 0 and top_k < next_token_logits.shape[-1]:
                 top_k_indices = torch.argsort(next_token_logits, dim=-1)[:, -top_k:]
                 top_k_logits = torch.gather(next_token_logits, dim=-1, index=top_k_indices)
 
@@ -859,8 +865,12 @@ class GlmAsrModel:
             if torch.all(finished):
                 break
 
-            # Update inputs_embeds with new token
+            # Decode only the new token while reusing KV cache.
             new_embeds = self.text_decoder.embed_tokens(next_token)
-            inputs_embeds = torch.cat([inputs_embeds, new_embeds], dim=1)
+            logits, past_key_values = self.decode(
+                inputs_embeds=new_embeds,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
 
         return generated
